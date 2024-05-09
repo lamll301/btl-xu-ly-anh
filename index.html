@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Lọc ảnh trong miền tần số</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <h2>Lọc ảnh trong miền tần số</h2>
+    
+    <div class="flex options">
+        <p>Chọn phép lọc:</p>
+        <div>
+            <select id="imgFiltering">
+                <option id="lowPass">Lọc thông thấp</option>
+                <option id="highPass">Lọc thông cao</option>
+                <option id="bandPass">Lọc dải thông</option>
+                <option id="bandStop">Lọc chặn dải thông</option>
+                <!-- <option id="laplacian">Lọc bằng toán tử Laplacian</option> -->
+                <!-- <option>Lọc đồng hình</option> -->
+            </select>
+        </div>
+    </div>
+    <div class="flex options">
+        <p>Chọn bộ lọc:</p>
+        <div>
+            <select id="filter">
+                <option id="ideal">Bộ lọc Ideal</option>
+                <option id="butterworth">Bộ lọc Butterworth</option>
+                <option id="gaussian">Bộ lọc Gaussian</option>
+            </select>
+        </div>
+        <p class="ml-20">Nhập D0:</p>
+        <input type="number" id="D0" name="D0">
+        <p class="ml-20">Nhập D1:</p>
+        <input type="number" id="D1" name="D1">
+        <button class="ml-20" id="btn">Xác nhận</button>
+    </div>
+    <div class="container flex">
+        <div class="container-inputoutput">
+            <div class="inputoutput">
+                <img id="imageSrc" alt="No Image" />
+                <div class="caption">imageSrc <input type="file" id="fileInput" name="file" /></div>
+            </div>
+            <div class="inputoutput mt-8">
+                <canvas id="canvasOutput" class="kernel"></canvas>
+                <div class="caption">canvasOutput</div>
+            </div>
+        </div>
+        <div class="inputoutput">
+            <canvas id="canvasKernel" class="kernel"></canvas>
+            <div class="caption">canvasKernel</div>
+        </div>
+    </div>
+    <script type="text/javascript">
+        
+        let imgElement = document.getElementById('imageSrc');
+        let inputElement = document.getElementById('fileInput');
+        // Hiển thị hình ảnh gốc
+        inputElement.addEventListener('change', (e) => {
+            imgElement.src = URL.createObjectURL(e.target.files[0]);
+        }, false);
+        // Bắt sự kiện khi click vào button
+        document.getElementById("btn").addEventListener("click", function() {
+            let D0 = document.getElementById("D0").value;
+            let D1 = document.getElementById("D1").value;
+            let imgFiltering = document.getElementById("imgFiltering");
+            let filter = document.getElementById("filter");
+            let selectedImgFilteringId = imgFiltering.options[imgFiltering.selectedIndex].id;
+            let selectedFilterId = filter.options[filter.selectedIndex].id;
+
+            let H;
+
+            const mat = cv.imread(imgElement);
+            const grayscaleMat = new cv.Mat();
+            cv.cvtColor(mat, grayscaleMat, cv.COLOR_RGBA2GRAY);
+            // 
+            const grayscaleImage = nj.array(grayscaleMat.data, 'uint8').reshape(grayscaleMat.rows, grayscaleMat.cols);
+            const paddedImage = padded_image(grayscaleImage);
+            // Tính nhân H
+            switch(selectedImgFilteringId) {
+                case "lowPass":
+                    switch(selectedFilterId) {
+                        case "ideal":
+                            H = ilpf(paddedImage, parseInt(D0));
+                            break;
+                        case "butterworth":
+                            H = blpf(paddedImage, parseInt(D0), 2);
+                            break;
+                        case "gaussian":
+                            H = glpf(paddedImage, parseInt(D0));
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                case "highPass":
+                    switch(selectedFilterId) {
+                        case "ideal":
+                            H = ihpf(paddedImage, parseInt(D0));
+                            break;
+                        case "butterworth":
+                            H = bhpf(paddedImage, parseInt(D0), 2);
+                            break;
+                        case "gaussian":
+                            H = ghpf(paddedImage, parseInt(D0));
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                case "bandPass":
+                    switch(selectedFilterId) {
+                        case "ideal":
+                            H = ibpf(paddedImage, parseInt(D0), parseInt(D1));
+                            break;
+                        case "butterworth":
+                            H = bbpf(paddedImage, parseInt(D0), parseInt(D1), 2);
+                            break;
+                        case "gaussian":
+                            H = gbpf(paddedImage, parseInt(D0), parseInt(D1));
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                case "bandStop":
+                    switch(selectedFilterId) {
+                        case "ideal":
+                            H = ibsf(paddedImage, parseInt(D0), parseInt(D1));
+                            break;
+                        case "butterworth":
+                            H = bbsf(paddedImage, parseInt(D0), parseInt(D1), 2);
+                            break;
+                        case "gaussian":
+                            H = gbsf(paddedImage, parseInt(D0), parseInt(D1));
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                // case "laplacian":
+                //     H = laplacian(paddedImage);
+                //     break;
+                default:
+                    break;
+            }
+            // 
+            let kernel = show_filter(H)
+            const kernelData = new Uint8Array(kernel.tolist().flat());
+            const kernelMat = new cv.Mat(kernel.shape[0], kernel.shape[1], cv.CV_8UC1);
+            kernelMat.data.set(kernelData);
+
+            const filteredImage = apply_filter(paddedImage, H)
+            // console.log("filteredImage" + filteredImage)
+            const data = new Uint8Array(filteredImage.tolist().flat());
+            const paddedMat = new cv.Mat(filteredImage.shape[0], filteredImage.shape[1], cv.CV_8UC1);
+            paddedMat.data.set(data);
+
+            cv.imshow(canvasKernel, kernelMat);
+            cv.imshow(canvasOutput, paddedMat);
+            mat.delete();
+        });
+    </script>
+    <script async src="opencv.js" type="text/javascript"></script>
+    <!-- numjs -->
+    <script src="https://cdn.jsdelivr.net/gh/nicolaspanel/numjs@0.15.1/dist/numjs.min.js"></script>
+    <script src="imageProcessing.js"></script>
+</body>
+
+</html>
