@@ -1,10 +1,62 @@
-function Fourier_transform(padded_image, H) {
-    let img = padded_image.tolist().map(row => row.map(value => [value, 0]));
-    let fft = nj.fft(img);
-    let G = nj.multiply(H.tolist().map(row => row.map(value => [value, 0])), fft);
-    let ifft = nj.ifft(G);
-    let real_ifft = nj.array(ifft.tolist().map(row => row.map(value => Math.round(value[0]))));
-    return real_ifft;
+// homomorphic
+function homoProcessInputImg(image) {
+    let [M, N] = image.shape;
+    let rs = nj.zeros([M, N]);
+    for (let i = 0; i < M; i++) {
+        for (let j = 0; j < N; j++) {
+            let val = Math.log(image.get(i, j) / 255 + 0.01);
+            rs.set(i, j, val);
+        } 
+    }
+    return rs;
+}
+function homoProcessOutputImg(image) {
+    let [M, N] = image.shape;
+    let result = nj.zeros([M, N]);
+    for (let i = 0; i < M; i++) {
+        for (let j = 0; j < N; j++) {
+            let val = 2*255 * (Math.E**(image.get(i, j)) - 0.01);
+            result.set(i, j, val);
+        }
+    }
+    return result;
+}
+function funclaplacianEnhanceImage(originalImage, lap, c=-1) {
+    let [M, N] = originalImage.shape;
+    let imageResult = nj.zeros([M, N]);
+    for (let i = 0; i < M; i++) {
+        for (let j = 0; j < N; j++) {
+            let value = originalImage.get(i, j) + c * (lap.get(i, j) / 255);
+            if (value < 0) {
+                value = 0;
+            }
+            else if (value > 255) {
+                value = 255;
+            }
+            imageResult.set(i, j, value)
+        }
+    }
+    return imageResult;
+}
+function laplacianImage(lap) {
+    let min = lap.min();
+    let max = lap.max();
+    let OldRange = max - min;
+    let NewRange = 255 - 0;
+    let lapScaled = nj.multiply(nj.divide(nj.subtract(lap, min), OldRange), NewRange).add(0);
+    return lapScaled;
+}
+function showLaplacianFilter(H) {
+    let [P, Q] = H.shape;
+    let H_normalized = nj.zeros([P, Q]);
+    let min = H.min();
+    let max = H.max();
+    for (let u = 0; u < P; u++) {
+        for (let v = 0; v < Q; v++) {
+            H_normalized.set(u, v, 255 * (H.get(u, v) - min) / (max - min));
+        }
+    }
+    return H_normalized;
 }
 function padded_image(image) {
     let [M, N] = image.shape;
@@ -16,6 +68,59 @@ function padded_image(image) {
         }
     }
     return paddedImage;
+}
+function increase_brightness(image, value=35) {
+    let [M, N] = image.shape;
+    let imgResult = nj.zeros([M, N]);
+    for (let i = 0; i < M; i++) {
+        for (let j = 0; j < N; j++) {
+            imgResult.set(i, j, image.get(i, j) + value);
+        }
+    }
+    return imgResult;
+}
+function Fourier_transform(padded_image, H) {
+    let img = padded_image.tolist().map(row => row.map(value => [value, 0]));
+    let fft = nj.fft(img);
+    let G = nj.multiply(H.tolist().map(row => row.map(value => [value, 0])), fft);
+    let ifft = nj.ifft(G);
+    let real_ifft = nj.array(ifft.tolist().map(row => row.map(value => Math.round(value[0]))));
+    return real_ifft;
+}
+// áp dụng bộ lọc
+function apply_filter(padded_image, H) {
+    // let padded_image = input_image.clone();     //không làm thay đổi dữ liệu trong biến paddedImage
+    let [P, Q] = padded_image.shape;
+    for (let x = 0; x < P; x++) {
+        for (let y = 0; y < Q; y++) {
+            padded_image.set(x, y, padded_image.get(x, y) * Math.pow(-1, x + y));
+        }
+    }
+    let G = Fourier_transform(padded_image, H);
+    for (let x = 0; x < P; x++) {
+        for (let y = 0; y < Q; y++) {
+            G.set(x, y, G.get(x, y) * Math.pow(-1, x + y));
+        }
+    }
+
+    let result_image = nj.zeros([P/2, Q/2]);
+    for (let i = 0; i < P/2; i++) {
+        for (let j = 0; j < Q/2; j++) {
+            result_image.set(i, j, G.get(i, j));
+        }
+    }
+    return result_image;
+}
+
+function show_filter(H) {
+    let [P, Q] = H.shape;
+    let H1 = nj.zeros([P, Q]);
+    for (let u = 0; u < P; u++) {
+        for (let v = 0; v < Q; v++) {
+            H1.set(u, v, H.get(u, v) * 255);
+        }
+    }
+    return H1;
 }
 // low pass
 function ilpf(padded_image, D0) {
@@ -145,7 +250,7 @@ function bbsf(padded_image, D0, D1, n) {   //butterworth bandstop filter
     }
     return H;
 }
-function gbsf(padded_image, D0, D1) {
+function gbsf(padded_image, D0, D1) {       //gaussian bandstop filter
     let [P, Q] = padded_image.shape;
     let H = gbpf(padded_image, D0, D1);
     for (let u = 0; u < P; u++) {
@@ -167,35 +272,34 @@ function laplacian(padded_image) {
     }
     return H;
 }
-function show_filter(H) {
-    let [P, Q] = H.shape;
-    let H1 = nj.zeros([P, Q]);
+// homomorphic
+function homomorphic(padded_image, y_low, y_high, D0, c=1) {
+    let [P, Q] = padded_image.shape;
+    let H = nj.zeros([P, Q]);
     for (let u = 0; u < P; u++) {
         for (let v = 0; v < Q; v++) {
-            H1.set(u, v, H.get(u, v) * 255);
+            let value = (y_high - y_low) * (1 - Math.E**(-c * ((u - P / 2)**2 + (v - Q / 2)**2) / (2 * D0**2))) + y_low
+            H.set(u, v, value);
         }
     }
-    return H1;
+    return H;
 }
-function apply_filter(padded_image, H) {
-    let [P, Q] = padded_image.shape;
-    for (let x = 0; x < P; x++) {
-        for (let y = 0; y < Q; y++) {
-            padded_image.set(x, y, padded_image.get(x, y) * Math.pow(-1, x + y));
-        }
-    }
-    let G = Fourier_transform(padded_image, H);
-    for (let x = 0; x < P; x++) {
-        for (let y = 0; y < Q; y++) {
-            G.set(x, y, G.get(x, y) * Math.pow(-1, x + y));
-        }
+// chỉnh kích thước ảnh cho phù hợp
+function resizeImage(image, maxWidth=500, maxHeight=500) {
+    let width = image.width;
+    let height = image.height;
+
+    if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
     }
 
-    let result_image = nj.zeros([P/2, Q/2]);
-    for (let i = 0; i < P/2; i++) {
-        for (let j = 0; j < Q/2; j++) {
-            result_image.set(i, j, G.get(i, j));
-        }
-    }
-    return result_image;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, width, height);
+
+    return canvas;
 }

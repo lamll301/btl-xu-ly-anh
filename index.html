@@ -17,8 +17,8 @@
                 <option id="highPass">Lọc thông cao</option>
                 <option id="bandPass">Lọc dải thông</option>
                 <option id="bandStop">Lọc chặn dải thông</option>
-                <!-- <option id="laplacian">Lọc bằng toán tử Laplacian</option> -->
-                <!-- <option>Lọc đồng hình</option> -->
+                <option id="laplacian">Lọc bằng toán tử Laplacian</option>
+                <option id="homomorphic">Lọc đồng hình</option>
             </select>
         </div>
     </div>
@@ -35,6 +35,10 @@
         <input type="number" id="D0" name="D0">
         <p class="ml-20">Nhập D1:</p>
         <input type="number" id="D1" name="D1">
+        <p class="ml-20">Nhập yLow:</p>
+        <input type="number" id="ylow" name="ylow">
+        <p class="ml-20">Nhập yHigh:</p>
+        <input type="number" id="yhigh" name="yhigh">
         <button class="ml-20" id="btn">Xác nhận</button>
     </div>
     <div class="container flex">
@@ -44,22 +48,31 @@
                 <div class="caption">imageSrc <input type="file" id="fileInput" name="file" /></div>
             </div>
             <div class="inputoutput mt-8">
-                <canvas id="canvasOutput" class="kernel"></canvas>
-                <div class="caption">canvasOutput</div>
+                <canvas id="canvasOutput" class="image"></canvas>
+                <div class="caption">Output</div>
+            </div>
+            <div id="laplacianEnhanceImage" class="inputoutput mt-8">
+                <canvas id="canvasLapEnhanceImg" class="image"></canvas>
+                <div class="caption">Ảnh sau khi được cải thiện</div>
             </div>
         </div>
         <div class="inputoutput">
-            <canvas id="canvasKernel" class="kernel"></canvas>
-            <div class="caption">canvasKernel</div>
+            <canvas id="canvasKernel" class="image"></canvas>
+            <div class="caption">Kernel</div>
         </div>
     </div>
     <script type="text/javascript">
-        
         let imgElement = document.getElementById('imageSrc');
         let inputElement = document.getElementById('fileInput');
         // Hiển thị hình ảnh gốc
         inputElement.addEventListener('change', (e) => {
-            imgElement.src = URL.createObjectURL(e.target.files[0]);
+            const file = e.target.files[0];
+            const img = new Image();
+            img.onload = function() {
+                const resizedCanvas = resizeImage(img);
+                imgElement.src = resizedCanvas.toDataURL();
+            };
+            img.src = URL.createObjectURL(file);
         }, false);
         // Bắt sự kiện khi click vào button
         document.getElementById("btn").addEventListener("click", function() {
@@ -67,17 +80,19 @@
             let D1 = document.getElementById("D1").value;
             let imgFiltering = document.getElementById("imgFiltering");
             let filter = document.getElementById("filter");
+            let laplacianEnhanceImage = document.getElementById("laplacianEnhanceImage");
+            let ylow = document.getElementById("ylow").value;
+            let yhigh = document.getElementById("yhigh").value;
             let selectedImgFilteringId = imgFiltering.options[imgFiltering.selectedIndex].id;
             let selectedFilterId = filter.options[filter.selectedIndex].id;
-
             let H;
 
             const mat = cv.imread(imgElement);
             const grayscaleMat = new cv.Mat();
             cv.cvtColor(mat, grayscaleMat, cv.COLOR_RGBA2GRAY);
-            // 
+
             const grayscaleImage = nj.array(grayscaleMat.data, 'uint8').reshape(grayscaleMat.rows, grayscaleMat.cols);
-            const paddedImage = padded_image(grayscaleImage);
+            let paddedImage = padded_image(grayscaleImage);
             // Tính nhân H
             switch(selectedImgFilteringId) {
                 case "lowPass":
@@ -140,22 +155,51 @@
                             break;
                     }
                     break;
-                // case "laplacian":
-                //     H = laplacian(paddedImage);
-                //     break;
+                case "laplacian":
+                    H = laplacian(paddedImage);
+                    break;
+                case "homomorphic":
+                    H = homomorphic(paddedImage, parseFloat(ylow), parseFloat(yhigh), parseInt(D0));
+                    break;
                 default:
                     break;
             }
-            // 
-            let kernel = show_filter(H)
-            const kernelData = new Uint8Array(kernel.tolist().flat());
-            const kernelMat = new cv.Mat(kernel.shape[0], kernel.shape[1], cv.CV_8UC1);
-            kernelMat.data.set(kernelData);
 
-            const filteredImage = apply_filter(paddedImage, H)
-            // console.log("filteredImage" + filteredImage)
+            let kernel, lapEnhanceImg, lapEnhanceImgData, lapEnhanceImgMat;
+            if (selectedImgFilteringId !== "laplacian") {
+                kernel = show_filter(H);
+                laplacianEnhanceImage.style.display = "none";
+            }
+            if (selectedImgFilteringId === "homomorphic") {
+                paddedImage = homoProcessInputImg(paddedImage);
+            }
+            // thực hiện g * h
+            let filteredImage = apply_filter(paddedImage, H);
+            if (selectedImgFilteringId === "lowPass" || selectedImgFilteringId === "bandStop") {
+                filteredImage = increase_brightness(filteredImage);
+            }
+            else if (selectedImgFilteringId === "laplacian") {
+                kernel = showLaplacianFilter(H);
+                filteredImage = laplacianImage(filteredImage);
+                lapEnhanceImg = funclaplacianEnhanceImage(grayscaleImage, filteredImage);
+                laplacianEnhanceImage.style.display = "block";
+
+                lapEnhanceImgData = new Uint8Array(lapEnhanceImg.tolist().flat());
+                lapEnhanceImgMat = new cv.Mat(lapEnhanceImg.shape[0], lapEnhanceImg.shape[1], cv.CV_8UC1);
+                lapEnhanceImgMat.data.set(lapEnhanceImgData);
+                cv.imshow(canvasLapEnhanceImg, lapEnhanceImgMat);
+            }
+            else if (selectedImgFilteringId === "homomorphic") {
+                filteredImage = homoProcessOutputImg(filteredImage);
+            }
+
+            const kernelData = new Uint8Array(kernel.tolist().flat());
             const data = new Uint8Array(filteredImage.tolist().flat());
+
+            const kernelMat = new cv.Mat(kernel.shape[0], kernel.shape[1], cv.CV_8UC1);
             const paddedMat = new cv.Mat(filteredImage.shape[0], filteredImage.shape[1], cv.CV_8UC1);
+            
+            kernelMat.data.set(kernelData);
             paddedMat.data.set(data);
 
             cv.imshow(canvasKernel, kernelMat);
@@ -164,8 +208,7 @@
         });
     </script>
     <script async src="opencv.js" type="text/javascript"></script>
-    <!-- numjs -->
-    <script src="https://cdn.jsdelivr.net/gh/nicolaspanel/numjs@0.15.1/dist/numjs.min.js"></script>
+    <script src="numjs.js"></script>
     <script src="imageProcessing.js"></script>
 </body>
 
