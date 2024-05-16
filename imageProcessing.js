@@ -15,7 +15,7 @@ function homoProcessOutputImg(image) {
     let result = nj.zeros([M, N]);
     for (let i = 0; i < M; i++) {
         for (let j = 0; j < N; j++) {
-            let val = 2*255 * (Math.E**(image.get(i, j)) - 0.01);
+            let val = 255 * (Math.E**(image.get(i, j)) - 0.01);
             result.set(i, j, val);
         }
     }
