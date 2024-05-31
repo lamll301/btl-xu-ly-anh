@@ -49,7 +49,7 @@
             </div>
             <div class="inputoutput mt-8">
                 <canvas id="canvasOutput" class="image"></canvas>
-                <div class="caption">Output</div>
+                <div class="caption">Output <button id="downloadBtn">Download</button></div>
             </div>
             <div id="laplacianEnhanceImage" class="inputoutput mt-8">
                 <canvas id="canvasLapEnhanceImg" class="image"></canvas>
@@ -74,6 +74,19 @@
             };
             img.src = URL.createObjectURL(file);
         }, false);
+        // Click vào nút download
+        document.getElementById("downloadBtn").addEventListener("click", function() {
+            const canvas = document.getElementById("canvasOutput");
+            const context = canvas.getContext('2d');
+            const canvasData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+            const isEmpty = !canvasData.some(color => color !== 0);
+            if (!isEmpty) {
+                const link = document.createElement("a");
+                link.download = "filteredImage.png";
+                link.href = canvas.toDataURL();
+                link.click();
+            }
+        });
         // Bắt sự kiện khi click vào button
         document.getElementById("btn").addEventListener("click", function() {
             let D0 = document.getElementById("D0").value;
@@ -90,8 +103,9 @@
             const mat = cv.imread(imgElement);
             const grayscaleMat = new cv.Mat();
             cv.cvtColor(mat, grayscaleMat, cv.COLOR_RGBA2GRAY);
-
             const grayscaleImage = nj.array(grayscaleMat.data, 'uint8').reshape(grayscaleMat.rows, grayscaleMat.cols);
+
+            // const rgbaImage = nj.array(mat.data, 'uint8').reshape(mat.rows, mat.cols, 4);
             let paddedImage = padded_image(grayscaleImage);
             // Tính nhân H
             switch(selectedImgFilteringId) {
@@ -159,7 +173,8 @@
                     H = laplacian(paddedImage);
                     break;
                 case "homomorphic":
-                    H = homomorphic(paddedImage, parseFloat(ylow), parseFloat(yhigh), parseInt(D0));
+                    // H = homomorphic(paddedImage, parseFloat(ylow), parseFloat(yhigh), parseInt(D0));
+                    H = homomorphic(paddedImage);
                     break;
                 default:
                     break;

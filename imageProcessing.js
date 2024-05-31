@@ -1,14 +1,14 @@
 // homomorphic
 function homoProcessInputImg(image) {
     let [M, N] = image.shape;
-    let rs = nj.zeros([M, N]);
+    let result = nj.zeros([M, N]);
     for (let i = 0; i < M; i++) {
         for (let j = 0; j < N; j++) {
             let val = Math.log(image.get(i, j) / 255 + 0.01);
-            rs.set(i, j, val);
+            result.set(i, j, val);
         } 
     }
-    return rs;
+    return result;
 }
 function homoProcessOutputImg(image) {
     let [M, N] = image.shape;
@@ -89,7 +89,6 @@ function Fourier_transform(padded_image, H) {
 }
 // áp dụng bộ lọc
 function apply_filter(padded_image, H) {
-    // let padded_image = input_image.clone();     //không làm thay đổi dữ liệu trong biến paddedImage
     let [P, Q] = padded_image.shape;
     for (let x = 0; x < P; x++) {
         for (let y = 0; y < Q; y++) {
@@ -273,7 +272,7 @@ function laplacian(padded_image) {
     return H;
 }
 // homomorphic
-function homomorphic(padded_image, y_low, y_high, D0, c=1) {
+function homomorphic(padded_image, y_low=0.5, y_high=2.5, D0=32, c=1) {
     let [P, Q] = padded_image.shape;
     let H = nj.zeros([P, Q]);
     for (let u = 0; u < P; u++) {
