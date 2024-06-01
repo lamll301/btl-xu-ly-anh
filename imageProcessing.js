@@ -302,3 +302,16 @@ function resizeImage(image, maxWidth=500, maxHeight=500) {
 
     return canvas;
 }
+function isGrayScaleImage(mat) {
+    let width = mat.cols;
+    let height = mat.rows;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let pixel = mat.ucharPtr(y, x);
+            if (pixel[0] !== pixel[1] || pixel[0] !== pixel[2]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
