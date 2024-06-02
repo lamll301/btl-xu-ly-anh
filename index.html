@@ -268,7 +268,6 @@
                 filteredImageRMat.delete();
                 filteredImageGMat.delete();
                 filteredImageBMat.delete();
-                console.log(mergedImage)
                 data = new Uint8Array(mergedImage.data);
                 paddedMat = new cv.Mat(mergedImage.rows, mergedImage.cols, cv.CV_8UC3);
                 mergedImage.delete();
