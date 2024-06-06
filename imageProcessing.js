@@ -79,14 +79,6 @@ function increase_brightness(image, value=35) {
     }
     return imgResult;
 }
-function Fourier_transform(padded_image, H) {
-    let img = padded_image.tolist().map(row => row.map(value => [value, 0]));
-    let fft = nj.fft(img);
-    let G = nj.multiply(H.tolist().map(row => row.map(value => [value, 0])), fft);
-    let ifft = nj.ifft(G);
-    let real_ifft = nj.array(ifft.tolist().map(row => row.map(value => Math.round(value[0]))));
-    return real_ifft;
-}
 // áp dụng bộ lọc
 function apply_filter(padded_image, H) {
     let [P, Q] = padded_image.shape;
@@ -95,13 +87,15 @@ function apply_filter(padded_image, H) {
             padded_image.set(x, y, padded_image.get(x, y) * Math.pow(-1, x + y));
         }
     }
-    let G = Fourier_transform(padded_image, H);
+    let fft = nj.fft(padded_image.tolist().map(row => row.map(value => [value, 0])));
+    let result = nj.multiply(H.tolist().map(row => row.map(value => [value, 0])), fft);
+    let ifft = nj.ifft(result);
+    let G = nj.array(ifft.tolist().map(row => row.map(value => Math.round(value[0]))));
     for (let x = 0; x < P; x++) {
         for (let y = 0; y < Q; y++) {
             G.set(x, y, G.get(x, y) * Math.pow(-1, x + y));
         }
     }
-
     let result_image = nj.zeros([P/2, Q/2]);
     for (let i = 0; i < P/2; i++) {
         for (let j = 0; j < Q/2; j++) {
